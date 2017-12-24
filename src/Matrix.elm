@@ -1,21 +1,26 @@
 module Matrix
     exposing
         ( Matrix
+        , constant
         , fold2
         , fromTypedArray
         , identity
         , innerProduct
+        , ones
         , size
         , transpose
         , unsafeColumnAt
         , unsafeGetAt
         , unsafeLineAt
         , unsafeSubmatrix
+        , zeros
         )
 
 {-| Matrix.
 
-@docs Matrix, fromTypedArray, identity
+@docs Matrix
+
+@docs fromTypedArray, zeros, ones, constant, identity
 
 @docs size
 
@@ -44,6 +49,54 @@ type alias Matrix =
 fromTypedArray : ( Int, Int ) -> JsTypedArray Float64 Float -> Matrix
 fromTypedArray ( height, width ) =
     Tensor.fromTypedArray [ height, width ]
+
+
+{-| Create a matrix of zeros.
+-}
+zeros : ( Int, Int ) -> Matrix
+zeros ( height, width ) =
+    let
+        positiveHeight =
+            max 0 height
+
+        positiveWidth =
+            max 0 width
+
+        length =
+            positiveHeight * positiveWidth
+
+        data =
+            JsFloat64Array.initialize length
+    in
+    fromTypedArray ( positiveHeight, positiveWidth ) data
+
+
+{-| Create a matrix of ones.
+-}
+ones : ( Int, Int ) -> Matrix
+ones size =
+    constant 1 size
+
+
+{-| Create a matrix holding the same constant for each element.
+-}
+constant : Float -> ( Int, Int ) -> Matrix
+constant value ( height, width ) =
+    let
+        positiveHeight =
+            max 0 height
+
+        positiveWidth =
+            max 0 width
+
+        length =
+            positiveHeight * positiveWidth
+
+        data =
+            JsFloat64Array.initialize length
+                |> JsTypedArray.replaceWithConstant 0 length value
+    in
+    fromTypedArray ( positiveHeight, positiveWidth ) data
 
 
 {-| Identity matrix of a given size.
@@ -75,13 +128,6 @@ identity size =
 isOnDiag : Int -> Int -> Bool
 isOnDiag matrixHeight index =
     index % (matrixHeight + 1) == 0
-
-
-{-| Create a matrix holding the same constant for each element.
--}
-constant : Float -> ( Int, Int ) -> Matrix
-constant value size =
-    Debug.crash "TODO"
 
 
 {-| Get the size of a matrix.
