@@ -52,28 +52,23 @@ stridesFromShape dimension shape =
 -}
 transpose : Tensor -> Tensor
 transpose tensor =
+    let
+        transposedShape =
+            JsTypedArray.reverse tensor.shape
+    in
     case tensor.view of
         T.RawView ->
-            { tensor
-                | shape = JsTypedArray.reverse tensor.shape
-                , view = T.TransposedView
-            }
+            { tensor | shape = transposedShape, view = T.TransposedView }
 
         T.TransposedView ->
-            { tensor
-                | shape = JsTypedArray.reverse tensor.shape
-                , view = T.RawView
-            }
+            { tensor | shape = transposedShape, view = T.RawView }
 
         T.ArrangedView view ->
             let
                 transposedView =
                     { view | strides = JsTypedArray.reverse view.strides }
             in
-            { tensor
-                | shape = JsTypedArray.reverse tensor.shape
-                , view = T.ArrangedView transposedView
-            }
+            { tensor | shape = transposedShape, view = T.ArrangedView transposedView }
 
 
 {-| Compute the inner product of two tensors.
