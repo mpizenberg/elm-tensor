@@ -12,14 +12,16 @@ import JsTypedArray exposing (Float64, JsTypedArray, Uint8)
 type alias Tensor =
     { data : FloatArray
     , dimension : Int
+    , length : Int
+    , shape : IntArray
     , view : TensorView
     }
 
 
 type TensorView
-    = RawView { shape : IntArray }
-    | TransposedView { shape : IntArray }
-    | ArrangedView { shape : IntArray, offset : Int, strides : IntArray }
+    = RawView
+    | TransposedView
+    | ArrangedView { offset : Int, strides : IntArray }
 
 
 type alias IntArray =

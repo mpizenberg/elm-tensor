@@ -32,13 +32,12 @@ fromTypedArray shape array =
     let
         shapeArray =
             JsUint8Array.fromList shape
-
-        dimension =
-            JsTypedArray.length shapeArray
     in
     { data = array
-    , dimension = dimension
-    , view = T.RawView { shape = shapeArray }
+    , dimension = JsTypedArray.length shapeArray
+    , length = JsTypedArray.length array
+    , shape = shapeArray
+    , view = T.RawView
     }
 
 
@@ -54,21 +53,27 @@ stridesFromShape dimension shape =
 transpose : Tensor -> Tensor
 transpose tensor =
     case tensor.view of
-        T.RawView view ->
-            { tensor | view = T.TransposedView view }
+        T.RawView ->
+            { tensor
+                | shape = JsTypedArray.reverse tensor.shape
+                , view = T.TransposedView
+            }
 
-        T.TransposedView view ->
-            { tensor | view = T.RawView view }
+        T.TransposedView ->
+            { tensor
+                | shape = JsTypedArray.reverse tensor.shape
+                , view = T.RawView
+            }
 
-        T.ArrangedView { shape, offset, strides } ->
+        T.ArrangedView view ->
             let
                 transposedView =
-                    { shape = JsTypedArray.reverse shape
-                    , offset = offset
-                    , strides = JsTypedArray.reverse strides
-                    }
+                    { view | strides = JsTypedArray.reverse view.strides }
             in
-            { tensor | view = T.ArrangedView transposedView }
+            { tensor
+                | shape = JsTypedArray.reverse tensor.shape
+                , view = T.ArrangedView transposedView
+            }
 
 
 {-| Compute the inner product of two tensors.
@@ -83,9 +88,4 @@ innerProduct =
 -}
 fold2 : (Float -> Float -> a -> a) -> a -> Tensor -> Tensor -> a
 fold2 f acc tensor1 tensor2 =
-    case ( tensor1.view, tensor2.view ) of
-        ( T.RawView _, T.RawView _ ) ->
-            JsTypedArray.indexedFoldl2 (always f) acc tensor1.data tensor2.data
-
-        _ ->
-            acc
+    Debug.crash "TODO"
