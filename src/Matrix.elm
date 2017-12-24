@@ -121,6 +121,8 @@ map f matrix =
 
 
 {-| Apply a function on all elements of two matrices and reduce a result.
+The two matrices are supposed to be of the same size, but this is
+the caller responsability.
 TODO: Optimize when only one is an arranged view.
 -}
 fold2 : (Float -> Float -> a -> a) -> a -> Matrix -> Matrix -> a
