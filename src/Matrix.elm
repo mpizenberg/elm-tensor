@@ -31,11 +31,11 @@ module Matrix
 
 -}
 
-import Internal.Tensor as T exposing (FloatArray, IntArray, TensorView)
+import Internal.Tensor as T exposing (FloatArray, IntArray, TensorView, fromTypedArray)
 import JsFloat64Array
 import JsTypedArray exposing (Float64, JsTypedArray, Uint8)
 import JsUint8Array
-import Tensor exposing (Tensor, fromTypedArray)
+import Tensor exposing (Tensor)
 
 
 {-| Matrix is an alias for Tensor.

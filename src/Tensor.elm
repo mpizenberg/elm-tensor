@@ -1,13 +1,12 @@
 module Tensor
     exposing
         ( Tensor
-        , fromTypedArray
         , transpose
         )
 
 {-| Tensor (as multidimensional array).
 
-@docs Tensor, fromTypedArray
+@docs Tensor
 
 @docs transpose
 
@@ -15,29 +14,12 @@ module Tensor
 
 import Internal.Tensor as T exposing (FloatArray, IntArray, TensorView)
 import JsTypedArray exposing (Float64, JsTypedArray, Uint8)
-import JsUint8Array
 
 
 {-| Tensor (as multidimensional array).
 -}
 type alias Tensor =
     T.Tensor
-
-
-{-| Create a Tensor from a typed array.
--}
-fromTypedArray : List Int -> JsTypedArray Float64 Float -> Tensor
-fromTypedArray shape array =
-    let
-        shapeArray =
-            JsUint8Array.fromList shape
-    in
-    { data = array
-    , dimension = JsTypedArray.length shapeArray
-    , length = JsTypedArray.length array
-    , shape = shapeArray
-    , view = T.RawView
-    }
 
 
 {-| Transpose a tensor.

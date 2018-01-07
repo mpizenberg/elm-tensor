@@ -1,21 +1,15 @@
 module TestFuzz
     exposing
-        ( arrangedMatrix
-        , matrix
-        , rawMatrix
+        ( rawMatrix
         , transposedMatrix
         )
 
 import Fuzz exposing (Fuzzer)
+import Internal.Tensor as T
 import JsFloat64Array
 import JsTypedArray exposing (Float64, JsTypedArray, Uint8)
 import Matrix exposing (Matrix)
 import Random
-
-
-maxDim : Int
-maxDim =
-    2
 
 
 maxSize : Int
@@ -31,23 +25,13 @@ size =
 rawMatrix : Fuzzer Matrix
 rawMatrix =
     Fuzz.tuple ( size, size )
-        |> Fuzz.andThen (\size -> Fuzz.map (Matrix.fromTypedArray size) (dataFuzzer size))
+        |> Fuzz.andThen (\( h, w ) -> Fuzz.map (T.fromTypedArray [ h, w ]) (dataFuzzer ( h, w )))
 
 
 transposedMatrix : Fuzzer Matrix
 transposedMatrix =
     rawMatrix
         |> Fuzz.map Matrix.transpose
-
-
-arrangedMatrix : Fuzzer Matrix
-arrangedMatrix =
-    Debug.crash "TODO"
-
-
-matrix : Fuzzer Matrix
-matrix =
-    Debug.crash "TODO"
 
 
 

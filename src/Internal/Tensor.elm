@@ -5,6 +5,7 @@ module Internal.Tensor
         , Tensor
         , TensorView(..)
         , extractValues
+        , fromTypedArray
         )
 
 import JsTypedArray exposing (Float64, JsTypedArray, Uint8)
@@ -46,3 +47,19 @@ stridesFromShape dimension shape =
 extractValues : Tensor -> FloatArray
 extractValues tensor =
     Debug.crash "TODO"
+
+
+{-| Create a Tensor from a typed array.
+-}
+fromTypedArray : List Int -> JsTypedArray Float64 Float -> Tensor
+fromTypedArray shape array =
+    let
+        shapeArray =
+            JsUint8Array.fromList shape
+    in
+    { data = array
+    , dimension = JsTypedArray.length shapeArray
+    , length = JsTypedArray.length array
+    , shape = shapeArray
+    , view = RawView
+    }
