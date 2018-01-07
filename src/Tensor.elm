@@ -41,13 +41,6 @@ fromTypedArray shape array =
     }
 
 
-stridesFromShape : Int -> List Int -> IntArray
-stridesFromShape dimension shape =
-    List.scanl (*) 1 shape
-        |> List.take dimension
-        |> JsUint8Array.fromList
-
-
 {-| Transpose a tensor.
 -}
 transpose : Tensor -> Tensor

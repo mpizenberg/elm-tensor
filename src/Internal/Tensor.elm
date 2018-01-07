@@ -30,3 +30,10 @@ type alias IntArray =
 
 type alias FloatArray =
     JsTypedArray Float64 Float
+
+
+stridesFromShape : Int -> List Int -> IntArray
+stridesFromShape dimension shape =
+    List.scanl (*) 1 shape
+        |> List.take dimension
+        |> JsUint8Array.fromList
