@@ -2,16 +2,14 @@ module Matrix
     exposing
         ( Matrix
         , constant
-        , fold2
-        , fromTypedArray
         , identity
-        , innerProduct
         , ones
         , size
         , times
         , transpose
         , unsafeColumnAt
         , unsafeGetAt
+        , unsafeInnerProduct
         , unsafeLineAt
         , unsafeSubmatrix
         , zeros
@@ -21,11 +19,11 @@ module Matrix
 
 @docs Matrix
 
-@docs fromTypedArray, zeros, ones, constant, identity
+@docs zeros, ones, constant, identity
 
 @docs size
 
-@docs transpose, fold2, innerProduct, unsafeSubmatrix
+@docs transpose, unsafeInnerProduct, unsafeSubmatrix
 
 @docs unsafeGetAt, unsafeColumnAt, unsafeLineAt
 
@@ -37,7 +35,7 @@ import Internal.Tensor as T exposing (FloatArray, IntArray, TensorView)
 import JsFloat64Array
 import JsTypedArray exposing (Float64, JsTypedArray, Uint8)
 import JsUint8Array
-import Tensor exposing (Tensor)
+import Tensor exposing (Tensor, fromTypedArray)
 
 
 {-| Matrix is an alias for Tensor.
@@ -45,13 +43,6 @@ It is your responsability to use it correctly.
 -}
 type alias Matrix =
     Tensor
-
-
-{-| Create a Matrix from a typed array.
--}
-fromTypedArray : ( Int, Int ) -> JsTypedArray Float64 Float -> Matrix
-fromTypedArray ( height, width ) =
-    Tensor.fromTypedArray [ height, width ]
 
 
 {-| Create a matrix of zeros.
@@ -65,20 +56,17 @@ zeros ( height, width ) =
         positiveWidth =
             max 0 width
 
-        length =
-            positiveHeight * positiveWidth
-
         data =
-            JsFloat64Array.initialize length
+            JsFloat64Array.zeros (positiveHeight * positiveWidth)
     in
-    fromTypedArray ( positiveHeight, positiveWidth ) data
+    fromTypedArray [ positiveHeight, positiveWidth ] data
 
 
 {-| Create a matrix of ones.
 -}
 ones : ( Int, Int ) -> Matrix
-ones size =
-    constant 1 size
+ones =
+    constant 1
 
 
 {-| Create a matrix holding the same constant for each element.
@@ -92,14 +80,10 @@ constant value ( height, width ) =
         positiveWidth =
             max 0 width
 
-        length =
-            positiveHeight * positiveWidth
-
         data =
-            JsFloat64Array.initialize length
-                |> JsTypedArray.replaceWithConstant 0 length value
+            JsFloat64Array.repeat (positiveHeight * positiveWidth) value
     in
-    fromTypedArray ( positiveHeight, positiveWidth ) data
+    fromTypedArray [ positiveHeight, positiveWidth ] data
 
 
 {-| Identity matrix of a given size.
@@ -110,13 +94,7 @@ identity size =
         positiveSize =
             max 0 size
 
-        length =
-            positiveSize * positiveSize
-
-        initArray =
-            JsFloat64Array.initialize length
-
-        valueInIdentity index _ =
+        valueInIdentity index =
             case index % (positiveSize + 1) of
                 0 ->
                     1
@@ -125,16 +103,18 @@ identity size =
                     0
 
         data =
-            JsTypedArray.indexedMap valueInIdentity initArray
+            JsFloat64Array.initialize (positiveSize * positiveSize) valueInIdentity
     in
-    fromTypedArray ( positiveSize, positiveSize ) data
+    fromTypedArray [ positiveSize, positiveSize ] data
 
 
 {-| Get the size of a matrix.
 -}
 size : Matrix -> ( Int, Int )
 size matrix =
-    ( JsTypedArray.unsafeGetAt 0 matrix.shape, JsTypedArray.unsafeGetAt 1 matrix.shape )
+    ( JsTypedArray.unsafeGetAt 0 matrix.shape
+    , JsTypedArray.unsafeGetAt 1 matrix.shape
+    )
 
 
 {-| Transpose a matrix.
@@ -144,35 +124,35 @@ transpose =
     Tensor.transpose
 
 
-{-| Reshape a matrix.
+{-| Reshape a matrix. Unsafe.
 It is caller responsability to make sure shapes are compatible.
 If matrix was internally an arranged view, recreate an new raw matrix.
 -}
-reshape : JsTypedArray Uint8 Int -> Matrix -> Matrix
-reshape shape matrix =
+reshapeUnsafe : JsTypedArray Uint8 Int -> Matrix -> Matrix
+reshapeUnsafe shape matrix =
     case matrix.view of
         T.ArrangedView _ ->
-            extractRaw matrix
-                |> reshape shape
+            { matrix | shape = shape, view = T.RawView, data = T.extractValues matrix }
 
         _ ->
             { matrix | shape = shape }
 
 
 {-| Stack all elements of a matrix in one column vector.
-If matrix was internally an arranged view, recreate an new raw matrix.
+
+Complexity:
+
+  - RawView and TransposedView: O(1)
+  - ArrangedView: O(length)
+
 -}
 stack : Matrix -> Matrix
 stack matrix =
-    Debug.crash "TODO"
-
-
-{-| If the matrix is internally an arranged matrix extract values to form a new raw matrix.
-Otherwise leave as it is.
--}
-extractRaw : Matrix -> Matrix
-extractRaw matrix =
-    Debug.crash "TODO"
+    let
+        newShape =
+            JsUint8Array.fromList [ matrix.length, 1 ]
+    in
+    reshapeUnsafe newShape matrix
 
 
 {-| Apply a function to each element of a matrix.
@@ -181,35 +161,26 @@ map : (Float -> Float) -> Matrix -> Matrix
 map f matrix =
     case matrix.view of
         T.ArrangedView _ ->
-            extractRaw matrix
-                |> map f
+            { matrix
+                | view = T.RawView
+                , data = JsTypedArray.map f (T.extractValues matrix)
+            }
 
         _ ->
-            { matrix | data = JsTypedArray.indexedMap (always f) matrix.data }
+            { matrix | data = JsTypedArray.map f matrix.data }
 
 
 {-| Apply a function on all elements of two matrices and reduce a result.
 The two matrices are supposed to be of the same size, but this is
-the caller responsability.
-TODO: Optimize when only one is an arranged view.
+the caller responsability make sure of this.
+TODO: Optimize the number of created arrays for non raw views.
 -}
-fold2 : (Float -> Float -> a -> a) -> a -> Matrix -> Matrix -> a
-fold2 f initialValue m1 m2 =
+unsafeFold2 : (Float -> Float -> a -> a) -> a -> Matrix -> Matrix -> a
+unsafeFold2 f initialValue m1 m2 =
     case ( m1.view, m2.view ) of
         ( T.RawView, T.RawView ) ->
-            JsTypedArray.indexedFoldl2 (always f) initialValue m1.data m2.data
+            JsTypedArray.foldl2 f initialValue m1.data m2.data
 
-        ( T.TransposedView, T.TransposedView ) ->
-            JsTypedArray.indexedFoldr2 (always f) initialValue m1.data m2.data
-
-        ( T.RawView, T.TransposedView ) ->
-            JsTypedArray.foldlr f initialValue m1.data m2.data
-
-        ( T.TransposedView, T.RawView ) ->
-            JsTypedArray.foldlr (flip f) initialValue m2.data m1.data
-
-        -- In the remaining cases, at least one is an ArrangedView.
-        -- TODO: For now, no optimization, just walk through indices.
         _ ->
             let
                 ( height1, width1 ) =
@@ -239,9 +210,9 @@ fold2 f initialValue m1 m2 =
 {-| Compute the inner product of two matrices.
 Warning! Does not check sizes or dimensions.
 -}
-innerProduct : Matrix -> Matrix -> Float
-innerProduct =
-    fold2 (\x y acc -> x * y + acc) 0
+unsafeInnerProduct : Matrix -> Matrix -> Float
+unsafeInnerProduct =
+    unsafeFold2 (\x y acc -> x * y + acc) 0
 
 
 {-| Extract a submatrix (unsafe).
@@ -283,7 +254,7 @@ unsafeSubmatrix ( iStart, iEnd ) ( jStart, jEnd ) matrix =
                 in
                 { matrix | length = newLength, shape = newShape, view = T.ArrangedView arrangedView }
 
-        -- TODO: indline optimization
+        -- TODO: inline optimization
         T.TransposedView ->
             matrix
                 |> transpose

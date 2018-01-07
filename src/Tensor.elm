@@ -2,7 +2,6 @@ module Tensor
     exposing
         ( Tensor
         , fromTypedArray
-        , innerProduct
         , transpose
         )
 
@@ -10,7 +9,7 @@ module Tensor
 
 @docs Tensor, fromTypedArray
 
-@docs transpose, innerProduct
+@docs transpose
 
 -}
 
@@ -62,18 +61,3 @@ transpose tensor =
                     { view | strides = JsTypedArray.reverse view.strides }
             in
             { tensor | shape = transposedShape, view = T.ArrangedView transposedView }
-
-
-{-| Compute the inner product of two tensors.
-Warning! Does not check sizes or dimensions.
--}
-innerProduct : Tensor -> Tensor -> Float
-innerProduct =
-    fold2 (\x y acc -> x * y + acc) 0
-
-
-{-| TODO (look at Matrix.fold2)
--}
-fold2 : (Float -> Float -> a -> a) -> a -> Tensor -> Tensor -> a
-fold2 f acc tensor1 tensor2 =
-    Debug.crash "TODO"

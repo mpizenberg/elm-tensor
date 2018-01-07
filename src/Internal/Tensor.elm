@@ -4,9 +4,11 @@ module Internal.Tensor
         , IntArray
         , Tensor
         , TensorView(..)
+        , extractValues
         )
 
 import JsTypedArray exposing (Float64, JsTypedArray, Uint8)
+import JsUint8Array
 
 
 type alias Tensor =
@@ -37,3 +39,10 @@ stridesFromShape dimension shape =
     List.scanl (*) 1 shape
         |> List.take dimension
         |> JsUint8Array.fromList
+
+
+{-| Extract values of a Tensor.
+-}
+extractValues : Tensor -> FloatArray
+extractValues tensor =
+    Debug.crash "TODO"
