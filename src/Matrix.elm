@@ -31,10 +31,10 @@ module Matrix
 
 -}
 
-import Internal.Tensor as T exposing (FloatArray, IntArray, TensorView, fromTypedArray)
+import Internal.List
+import Internal.Tensor as T exposing (TensorView, fromTypedArray)
 import JsFloat64Array
-import JsTypedArray exposing (Float64, JsTypedArray, Uint8)
-import JsUint8Array
+import JsTypedArray exposing (Float64, JsTypedArray)
 import Tensor exposing (Tensor)
 
 
@@ -112,23 +112,26 @@ identity size =
 -}
 size : Matrix -> ( Int, Int )
 size matrix =
-    ( JsTypedArray.unsafeGetAt 0 matrix.shape
-    , JsTypedArray.unsafeGetAt 1 matrix.shape
-    )
+    case matrix.shape of
+        height :: width :: [] ->
+            ( height, width )
+
+        _ ->
+            Debug.crash "This should never happen"
 
 
 {-| Transpose a matrix.
 -}
 transpose : Matrix -> Matrix
 transpose =
-    Tensor.transpose
+    T.transpose
 
 
 {-| Reshape a matrix. Unsafe.
 It is caller responsability to make sure shapes are compatible.
 If matrix was internally an arranged view, recreate an new raw matrix.
 -}
-reshapeUnsafe : JsTypedArray Uint8 Int -> Matrix -> Matrix
+reshapeUnsafe : List Int -> Matrix -> Matrix
 reshapeUnsafe shape matrix =
     case matrix.view of
         T.ArrangedView _ ->
@@ -148,11 +151,7 @@ Complexity:
 -}
 stack : Matrix -> Matrix
 stack matrix =
-    let
-        newShape =
-            JsUint8Array.fromList [ matrix.length, 1 ]
-    in
-    reshapeUnsafe newShape matrix
+    reshapeUnsafe [ matrix.length, 1 ] matrix
 
 
 {-| Apply a function to each element of a matrix.
@@ -231,7 +230,7 @@ unsafeSubmatrix ( iStart, iEnd ) ( jStart, jEnd ) matrix =
             newHeight * newWidth
 
         newShape =
-            JsUint8Array.fromList [ newHeight, newWidth ]
+            [ newHeight, newWidth ]
     in
     case matrix.view of
         T.RawView ->
@@ -249,7 +248,7 @@ unsafeSubmatrix ( iStart, iEnd ) ( jStart, jEnd ) matrix =
                 let
                     arrangedView =
                         { offset = offset
-                        , strides = JsUint8Array.fromList [ 1, height ]
+                        , strides = [ 1, height ]
                         }
                 in
                 { matrix | length = newLength, shape = newShape, view = T.ArrangedView arrangedView }
@@ -263,58 +262,27 @@ unsafeSubmatrix ( iStart, iEnd ) ( jStart, jEnd ) matrix =
 
         T.ArrangedView { offset, strides } ->
             let
-                vStride =
-                    JsTypedArray.unsafeGetAt 0 strides
-
-                hStride =
-                    JsTypedArray.unsafeGetAt 1 strides
-
-                newArrangedView =
-                    { offset = offset + jStart * hStride + iStart * vStride
-                    , strides = strides
-                    }
+                newOffset =
+                    [ iStart, jStart ]
+                        |> Internal.List.foldl2 (\stride i acc -> stride * i + acc) offset strides
             in
-            { matrix | length = newLength, shape = newShape, view = T.ArrangedView newArrangedView }
+            { matrix
+                | length = newLength
+                , shape = newShape
+                , view =
+                    T.ArrangedView
+                        { offset = newOffset
+                        , strides = strides
+                        }
+            }
 
 
 {-| Access value in a matrix (unsafe).
 Warning! Does not check if out of bounds.
 -}
 unsafeGetAt : ( Int, Int ) -> Matrix -> Float
-unsafeGetAt ( line, column ) matrix =
-    case matrix.view of
-        T.RawView ->
-            let
-                height =
-                    JsTypedArray.unsafeGetAt 0 matrix.shape
-
-                index =
-                    height * column + line
-            in
-            JsTypedArray.unsafeGetAt index matrix.data
-
-        T.TransposedView ->
-            let
-                width =
-                    JsTypedArray.unsafeGetAt 1 matrix.shape
-
-                index =
-                    width * line + column
-            in
-            JsTypedArray.unsafeGetAt index matrix.data
-
-        T.ArrangedView { offset, strides } ->
-            let
-                vStride =
-                    JsTypedArray.unsafeGetAt 0 strides
-
-                hStride =
-                    JsTypedArray.unsafeGetAt 1 strides
-
-                index =
-                    offset + hStride * column + vStride * line
-            in
-            JsTypedArray.unsafeGetAt index matrix.data
+unsafeGetAt ( line, column ) =
+    T.unsafeGetAt [ line, column ]
 
 
 {-| Extract a line from a matrix (unsafe).
@@ -325,25 +293,19 @@ unsafeLineAt i matrix =
     case matrix.view of
         T.RawView ->
             let
-                width =
-                    JsTypedArray.unsafeGetAt 1 matrix.shape
+                ( height, width ) =
+                    case matrix.shape of
+                        h :: w :: _ ->
+                            ( h, w )
 
-                newShape =
-                    JsUint8Array.fromList [ 1, width ]
-
-                offset =
-                    i
-
-                oldHeight =
-                    JsTypedArray.unsafeGetAt 0 matrix.shape
-
-                strides =
-                    JsUint8Array.fromList [ 1, oldHeight ]
-
-                arrangedView =
-                    T.ArrangedView { offset = offset, strides = strides }
+                        _ ->
+                            Debug.crash "Should never happen"
             in
-            { matrix | length = width, shape = newShape, view = arrangedView }
+            { matrix
+                | length = width
+                , shape = [ 1, width ]
+                , view = T.ArrangedView { offset = i, strides = [ 1, height ] }
+            }
 
         _ ->
             matrix
@@ -361,7 +323,12 @@ unsafeColumnAt j matrix =
         T.RawView ->
             let
                 height =
-                    JsTypedArray.unsafeGetAt 0 matrix.shape
+                    case matrix.shape of
+                        h :: _ ->
+                            h
+
+                        _ ->
+                            Debug.crash "Should never happen"
 
                 matrixOffset =
                     j * height
@@ -370,7 +337,7 @@ unsafeColumnAt j matrix =
                     JsTypedArray.extract matrixOffset (matrixOffset + height) matrix.data
 
                 newShape =
-                    JsUint8Array.fromList [ height, 1 ]
+                    [ height, 1 ]
             in
             { matrix | data = columnData, length = height, shape = newShape }
 
@@ -382,20 +349,19 @@ unsafeColumnAt j matrix =
 
         T.ArrangedView { offset, strides } ->
             let
-                height =
-                    JsTypedArray.unsafeGetAt 0 matrix.shape
+                ( height, vStride, hStride ) =
+                    case ( matrix.shape, strides ) of
+                        ( h :: _, vStr :: hStr :: _ ) ->
+                            ( h, vStr, hStr )
 
-                vStride =
-                    JsTypedArray.unsafeGetAt 0 strides
-
-                hStride =
-                    JsTypedArray.unsafeGetAt 1 strides
+                        _ ->
+                            Debug.crash "Should never happen"
 
                 newOffset =
                     offset + j * hStride
 
                 newShape =
-                    JsUint8Array.fromList [ height, 1 ]
+                    [ height, 1 ]
             in
             if vStride == 1 then
                 let

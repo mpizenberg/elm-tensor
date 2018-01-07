@@ -1,22 +1,22 @@
 module Internal.Tensor
     exposing
-        ( FloatArray
-        , IntArray
-        , Tensor
+        ( Tensor
         , TensorView(..)
         , extractValues
         , fromTypedArray
+        , transpose
+        , unsafeGetAt
         )
 
-import JsTypedArray exposing (Float64, JsTypedArray, Uint8)
-import JsUint8Array
+import Internal.List
+import JsTypedArray exposing (Float64, JsTypedArray)
 
 
 type alias Tensor =
-    { data : FloatArray
+    { data : DataArray
     , dimension : Int
     , length : Int
-    , shape : IntArray
+    , shape : List Int
     , view : TensorView
     }
 
@@ -24,27 +24,69 @@ type alias Tensor =
 type TensorView
     = RawView
     | TransposedView
-    | ArrangedView { offset : Int, strides : IntArray }
+    | ArrangedView { offset : Int, strides : List Int }
 
 
-type alias IntArray =
-    JsTypedArray Uint8 Int
-
-
-type alias FloatArray =
+type alias DataArray =
     JsTypedArray Float64 Float
 
 
-stridesFromShape : Int -> List Int -> IntArray
+{-| Transpose a tensor.
+-}
+transpose : Tensor -> Tensor
+transpose tensor =
+    let
+        transposedShape =
+            List.reverse tensor.shape
+    in
+    case tensor.view of
+        RawView ->
+            { tensor | shape = transposedShape, view = TransposedView }
+
+        TransposedView ->
+            { tensor | shape = transposedShape, view = RawView }
+
+        ArrangedView view ->
+            let
+                transposedView =
+                    { view | strides = List.reverse view.strides }
+            in
+            { tensor | shape = transposedShape, view = ArrangedView transposedView }
+
+
+stridesFromShape : Int -> List Int -> List Int
 stridesFromShape dimension shape =
     List.scanl (*) 1 shape
         |> List.take dimension
-        |> JsUint8Array.fromList
+
+
+unsafeGetAt : List Int -> Tensor -> Float
+unsafeGetAt pos tensor =
+    let
+        tensorStrides =
+            case tensor.view of
+                RawView ->
+                    List.scanl (*) 1 tensor.shape
+
+                TransposedView ->
+                    List.reverse tensor.shape
+                        |> List.scanl (*) 1
+                        |> List.reverse
+                        |> List.drop 1
+
+                ArrangedView { strides } ->
+                    strides
+
+        index =
+            tensorStrides
+                |> Internal.List.foldl2 (\p stride acc -> p * stride + acc) 0 pos
+    in
+    JsTypedArray.unsafeGetAt index tensor.data
 
 
 {-| Extract values of a Tensor.
 -}
-extractValues : Tensor -> FloatArray
+extractValues : Tensor -> DataArray
 extractValues tensor =
     Debug.crash "TODO"
 
@@ -53,13 +95,9 @@ extractValues tensor =
 -}
 fromTypedArray : List Int -> JsTypedArray Float64 Float -> Tensor
 fromTypedArray shape array =
-    let
-        shapeArray =
-            JsUint8Array.fromList shape
-    in
     { data = array
-    , dimension = JsTypedArray.length shapeArray
+    , dimension = List.length shape
     , length = JsTypedArray.length array
-    , shape = shapeArray
+    , shape = shape
     , view = RawView
     }
