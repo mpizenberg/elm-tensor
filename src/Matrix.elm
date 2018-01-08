@@ -113,7 +113,7 @@ identity size =
 size : Matrix -> ( Int, Int )
 size matrix =
     case matrix.shape of
-        height :: width :: [] ->
+        height :: width :: _ ->
             ( height, width )
 
         _ ->
@@ -131,8 +131,8 @@ transpose =
 It is caller responsability to make sure shapes are compatible.
 If matrix was internally an arranged view, recreate an new raw matrix.
 -}
-reshapeUnsafe : List Int -> Matrix -> Matrix
-reshapeUnsafe shape matrix =
+unsafeReshape : List Int -> Matrix -> Matrix
+unsafeReshape shape matrix =
     case matrix.view of
         T.ArrangedView _ ->
             { matrix | shape = shape, view = T.RawView, data = T.extractValues matrix }
@@ -151,7 +151,7 @@ Complexity:
 -}
 stack : Matrix -> Matrix
 stack matrix =
-    reshapeUnsafe [ matrix.length, 1 ] matrix
+    unsafeReshape [ matrix.length, 1 ] matrix
 
 
 {-| Apply a function to each element of a matrix.
@@ -307,7 +307,17 @@ unsafeLineAt i matrix =
                 , view = T.ArrangedView { offset = i, strides = [ 1, height ] }
             }
 
-        _ ->
+        T.TransposedView ->
+            -- Slightly different from ArrangedView branch
+            -- to produce a RawView instead of a TransposedView.
+            let
+                transposedColumn =
+                    transpose matrix
+                        |> unsafeColumnAt i
+            in
+            { transposedColumn | shape = List.reverse transposedColumn.shape }
+
+        T.ArrangedView _ ->
             matrix
                 |> transpose
                 |> unsafeColumnAt i
