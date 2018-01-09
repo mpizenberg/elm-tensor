@@ -2,10 +2,12 @@ module TestMatrix
     exposing
         ( equal
         , transpose
+        , unsafeSubmatrix
         )
 
 import Expect
 import Internal.Tensor as T
+import List.Extra
 import Matrix
 import Test exposing (..)
 import TestFuzz
@@ -46,4 +48,33 @@ transpose =
                     |> Matrix.transpose
                     |> T.equal matrix
                     |> Expect.true "should be: transpose (transpose matrix) == matrix"
+        ]
+
+
+unsafeSubmatrix : Test
+unsafeSubmatrix =
+    describe "unsafeSubmatrix"
+        [ fuzz TestFuzz.submatrix "is coherent with unsafeGetAt" <|
+            \( ( iStart, iEnd ), ( jStart, jEnd ), matrix ) ->
+                let
+                    ( height, width ) =
+                        ( iEnd - iStart, jEnd - jStart )
+
+                    submatrix =
+                        Matrix.unsafeSubmatrix ( iStart, iEnd ) ( jStart, jEnd ) matrix
+
+                    valuesFullMatrix =
+                        [ List.range jStart (jEnd - 1), List.range iStart (iEnd - 1) ]
+                            |> List.Extra.cartesianProduct
+                            |> List.map List.reverse
+                            |> List.map (\loc -> T.unsafeGetAt loc matrix)
+
+                    valuesSubMatrix =
+                        [ List.range 0 (width - 1), List.range 0 (height - 1) ]
+                            |> List.Extra.cartesianProduct
+                            |> List.map List.reverse
+                            |> List.map (\loc -> T.unsafeGetAt loc submatrix)
+                in
+                valuesFullMatrix
+                    |> Expect.equal valuesSubMatrix
         ]

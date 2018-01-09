@@ -3,7 +3,7 @@ module TestFuzz
         ( matrix
         , rawMatrix
         , stridesMatrix
-        , toStride
+        , submatrix
         , transposedMatrix
         )
 
@@ -49,7 +49,19 @@ stridesMatrix =
 
 
 toStride : Matrix -> Fuzzer Matrix
-toStride m =
+toStride =
+    toSubmatrix
+        >> Fuzz.map (\( iRange, jRange, someM ) -> Matrix.unsafeSubmatrix iRange jRange someM)
+
+
+submatrix : Fuzzer ( ( Int, Int ), ( Int, Int ), Matrix )
+submatrix =
+    matrix
+        |> Fuzz.andThen toSubmatrix
+
+
+toSubmatrix : Matrix -> Fuzzer ( ( Int, Int ), ( Int, Int ), Matrix )
+toSubmatrix m =
     let
         ( height, width ) =
             Matrix.unsafeSize m
@@ -61,7 +73,7 @@ toStride m =
                 (Fuzz.intRange 0 maxValue)
     in
     Fuzz.map2
-        (\iRange jRange -> Matrix.unsafeSubmatrix iRange jRange m)
+        (\iRange jRange -> ( iRange, jRange, m ))
         (rangeFuzzer height)
         (rangeFuzzer width)
 
