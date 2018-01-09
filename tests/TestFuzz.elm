@@ -1,6 +1,7 @@
 module TestFuzz
     exposing
-        ( rawMatrix
+        ( matrix
+        , rawMatrix
         , stridesMatrix
         , transposedMatrix
         )
@@ -21,6 +22,11 @@ maxSize =
 size : Fuzzer Int
 size =
     Fuzz.intRange 0 maxSize
+
+
+matrix : Fuzzer Matrix
+matrix =
+    Fuzz.oneOf [ rawMatrix, transposedMatrix, stridesMatrix ]
 
 
 rawMatrix : Fuzzer Matrix
