@@ -4,9 +4,11 @@ module Internal.Tensor
         , TensorView(..)
         , equal
         , extractValues
-        , fromTypedArray
+        , map
         , transpose
+        , unsafeFromTypedArray
         , unsafeGetAt
+        , unsafeReshape
         )
 
 import Internal.List
@@ -27,7 +29,7 @@ type alias Tensor =
 type TensorView
     = RawView
     | TransposedView
-    | ArrangedView { offset : Int, strides : List Int }
+    | StridesView (List Int)
 
 
 type alias DataArray =
@@ -49,14 +51,12 @@ transpose tensor =
         TransposedView ->
             { tensor | shape = transposedShape, view = RawView }
 
-        ArrangedView view ->
-            let
-                transposedView =
-                    { view | strides = List.reverse view.strides }
-            in
-            { tensor | shape = transposedShape, view = ArrangedView transposedView }
+        StridesView strides ->
+            { tensor | shape = transposedShape, view = StridesView (List.reverse strides) }
 
 
+{-| Just as a reminder of how to do it.
+-}
 stridesFromShape : Int -> List Int -> List Int
 stridesFromShape dimension shape =
     List.scanl (*) 1 shape
@@ -77,7 +77,7 @@ unsafeGetAt pos tensor =
                         |> List.reverse
                         |> List.drop 1
 
-                ArrangedView { strides } ->
+                StridesView strides ->
                     strides
 
         index =
@@ -103,6 +103,13 @@ equal tensor1 tensor2 =
         _ ->
             (tensor1.shape == tensor2.shape)
                 && JsTypedArray.equal (extractValues tensor1) (extractValues tensor2)
+
+
+{-| Extract values given a shape, strides and data array.
+-}
+extractValuesDetailed : List Int -> List Int -> DataArray -> DataArray
+extractValuesDetailed shape strides data =
+    Debug.crash "TODO"
 
 
 {-| Extract values of a Tensor.
@@ -158,11 +165,46 @@ extractValues tensor =
 
 {-| Create a Tensor from a typed array.
 -}
-fromTypedArray : List Int -> JsTypedArray Float64 Float -> Tensor
-fromTypedArray shape array =
+unsafeFromTypedArray : Int -> List Int -> JsTypedArray Float64 Float -> Tensor
+unsafeFromTypedArray dimension shape array =
     { data = array
-    , dimension = List.length shape
+    , dimension = dimension
     , length = JsTypedArray.length array
     , shape = shape
     , view = RawView
     }
+
+
+{-| Reshape a tensor. Unsafe.
+It is caller responsability to make sure shapes are compatible.
+If tensor was internally a strides view, recreate an new raw tensor.
+-}
+unsafeReshape : List Int -> Tensor -> Tensor
+unsafeReshape shape tensor =
+    case tensor.view of
+        StridesView strides ->
+            { tensor
+                | shape = shape
+                , view = RawView
+                , data = extractValuesDetailed shape strides tensor.data
+            }
+
+        _ ->
+            { tensor | shape = shape }
+
+
+{-| Apply a function to each element of a tensor.
+-}
+map : (Float -> Float) -> Tensor -> Tensor
+map f tensor =
+    case tensor.view of
+        StridesView strides ->
+            { tensor
+                | view = RawView
+                , data =
+                    extractValuesDetailed tensor.shape strides tensor.data
+                        |> JsTypedArray.map f
+            }
+
+        _ ->
+            { tensor | data = JsTypedArray.map f tensor.data }

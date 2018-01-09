@@ -1,38 +1,35 @@
 module Matrix
     exposing
         ( Matrix
-        , constant
-        , identity
-        , ones
-        , size
-        , times
         , transpose
         , unsafeColumnAt
+        , unsafeConstant
         , unsafeGetAt
+        , unsafeIdentity
         , unsafeInnerProduct
         , unsafeLineAt
+        , unsafeOnes
+        , unsafeSize
         , unsafeSubmatrix
-        , zeros
+        , unsafeZeros
         )
 
 {-| Matrix.
 
 @docs Matrix
 
-@docs zeros, ones, constant, identity
+@docs unsafeZeros, unsafeOnes, unsafeConstant, unsafeIdentity
 
-@docs size
+@docs unsafeSize
 
 @docs transpose, unsafeInnerProduct, unsafeSubmatrix
 
 @docs unsafeGetAt, unsafeColumnAt, unsafeLineAt
 
-@docs times
-
 -}
 
 import Internal.List
-import Internal.Tensor as T exposing (TensorView, fromTypedArray)
+import Internal.Tensor as T exposing (TensorView, unsafeFromTypedArray)
 import JsFloat64Array
 import JsTypedArray exposing (Float64, JsTypedArray)
 import Tensor exposing (Tensor)
@@ -47,71 +44,51 @@ type alias Matrix =
 
 {-| Create a matrix of zeros.
 -}
-zeros : ( Int, Int ) -> Matrix
-zeros ( height, width ) =
-    let
-        positiveHeight =
-            max 0 height
-
-        positiveWidth =
-            max 0 width
-
-        data =
-            JsFloat64Array.zeros (positiveHeight * positiveWidth)
-    in
-    fromTypedArray [ positiveHeight, positiveWidth ] data
+unsafeZeros : ( Int, Int ) -> Matrix
+unsafeZeros ( height, width ) =
+    JsFloat64Array.zeros (height * width)
+        |> unsafeFromTypedArray 2 [ height, width ]
 
 
 {-| Create a matrix of ones.
 -}
-ones : ( Int, Int ) -> Matrix
-ones =
-    constant 1
+unsafeOnes : ( Int, Int ) -> Matrix
+unsafeOnes =
+    unsafeConstant 1
 
 
 {-| Create a matrix holding the same constant for each element.
 -}
-constant : Float -> ( Int, Int ) -> Matrix
-constant value ( height, width ) =
-    let
-        positiveHeight =
-            max 0 height
-
-        positiveWidth =
-            max 0 width
-
-        data =
-            JsFloat64Array.repeat (positiveHeight * positiveWidth) value
-    in
-    fromTypedArray [ positiveHeight, positiveWidth ] data
+unsafeConstant : Float -> ( Int, Int ) -> Matrix
+unsafeConstant value ( height, width ) =
+    JsFloat64Array.repeat (height * width) value
+        |> unsafeFromTypedArray 2 [ height, width ]
 
 
 {-| Identity matrix of a given size.
 -}
-identity : Int -> Matrix
-identity size =
+unsafeIdentity : Int -> Matrix
+unsafeIdentity size =
     let
-        positiveSize =
-            max 0 size
+        stepSize =
+            size + 1
 
         valueInIdentity index =
-            case index % (positiveSize + 1) of
+            case index % stepSize of
                 0 ->
                     1
 
                 _ ->
                     0
-
-        data =
-            JsFloat64Array.initialize (positiveSize * positiveSize) valueInIdentity
     in
-    fromTypedArray [ positiveSize, positiveSize ] data
+    JsFloat64Array.initialize (size * size) valueInIdentity
+        |> unsafeFromTypedArray 2 [ size, size ]
 
 
 {-| Get the size of a matrix.
 -}
-size : Matrix -> ( Int, Int )
-size matrix =
+unsafeSize : Matrix -> ( Int, Int )
+unsafeSize matrix =
     case matrix.shape of
         height :: width :: _ ->
             ( height, width )
@@ -127,20 +104,6 @@ transpose =
     T.transpose
 
 
-{-| Reshape a matrix. Unsafe.
-It is caller responsability to make sure shapes are compatible.
-If matrix was internally an arranged view, recreate an new raw matrix.
--}
-unsafeReshape : List Int -> Matrix -> Matrix
-unsafeReshape shape matrix =
-    case matrix.view of
-        T.ArrangedView _ ->
-            { matrix | shape = shape, view = T.RawView, data = T.extractValues matrix }
-
-        _ ->
-            { matrix | shape = shape }
-
-
 {-| Stack all elements of a matrix in one column vector.
 
 Complexity:
@@ -151,22 +114,7 @@ Complexity:
 -}
 stack : Matrix -> Matrix
 stack matrix =
-    unsafeReshape [ matrix.length, 1 ] matrix
-
-
-{-| Apply a function to each element of a matrix.
--}
-map : (Float -> Float) -> Matrix -> Matrix
-map f matrix =
-    case matrix.view of
-        T.ArrangedView _ ->
-            { matrix
-                | view = T.RawView
-                , data = JsTypedArray.map f (T.extractValues matrix)
-            }
-
-        _ ->
-            { matrix | data = JsTypedArray.map f matrix.data }
+    T.unsafeReshape [ matrix.length, 1 ] matrix
 
 
 {-| Apply a function on all elements of two matrices and reduce a result.
@@ -182,17 +130,14 @@ unsafeFold2 f initialValue m1 m2 =
 
         _ ->
             let
-                ( height1, width1 ) =
-                    size m1
-
-                ( height2, width2 ) =
-                    size m2
+                ( height, width ) =
+                    unsafeSize m1
 
                 lines =
-                    List.range 0 (min height1 height2 - 1)
+                    List.range 0 (height - 1)
 
                 columns =
-                    List.range 0 (min width1 width2 - 1)
+                    List.range 0 (width - 1)
 
                 columnSubscripts c =
                     List.map (\l -> ( l, c )) lines
@@ -221,7 +166,7 @@ unsafeSubmatrix : ( Int, Int ) -> ( Int, Int ) -> Matrix -> Matrix
 unsafeSubmatrix ( iStart, iEnd ) ( jStart, jEnd ) matrix =
     let
         ( height, width ) =
-            size matrix
+            unsafeSize matrix
 
         ( newHeight, newWidth ) =
             ( iEnd - iStart, jEnd - jStart )
@@ -236,22 +181,27 @@ unsafeSubmatrix ( iStart, iEnd ) ( jStart, jEnd ) matrix =
         T.RawView ->
             let
                 offset =
-                    jStart * height + iStart
+                    iStart + jStart * height
+
+                endIndex =
+                    iEnd + (jEnd - 1) * height
+
+                subData =
+                    JsTypedArray.extract offset endIndex matrix.data
             in
             if iStart == 0 && iEnd == height then
-                let
-                    subData =
-                        JsTypedArray.extract offset (offset + newHeight * newWidth) matrix.data
-                in
-                { matrix | data = subData, length = newLength, shape = newShape }
+                { matrix
+                    | data = subData
+                    , length = newLength
+                    , shape = newShape
+                }
             else
-                let
-                    arrangedView =
-                        { offset = offset
-                        , strides = [ 1, height ]
-                        }
-                in
-                { matrix | length = newLength, shape = newShape, view = T.ArrangedView arrangedView }
+                { matrix
+                    | data = subData
+                    , length = newLength
+                    , shape = newShape
+                    , view = T.StridesView [ 1, height ]
+                }
 
         -- TODO: inline optimization
         T.TransposedView ->
@@ -260,20 +210,24 @@ unsafeSubmatrix ( iStart, iEnd ) ( jStart, jEnd ) matrix =
                 |> unsafeSubmatrix ( jStart, jEnd ) ( iStart, iEnd )
                 |> transpose
 
-        T.ArrangedView { offset, strides } ->
+        T.StridesView strides ->
             let
-                newOffset =
-                    [ iStart, jStart ]
-                        |> Internal.List.foldl2 (\stride i acc -> stride * i + acc) offset strides
+                subToIndex =
+                    Internal.List.foldl2 (\stride sub acc -> stride * sub + acc) 0 strides
+
+                offset =
+                    subToIndex [ iStart, jStart ]
+
+                endIndex =
+                    1 + subToIndex [ iEnd - 1, jEnd - 1 ]
+
+                subData =
+                    JsTypedArray.extract offset endIndex matrix.data
             in
             { matrix
-                | length = newLength
+                | data = subData
+                , length = newLength
                 , shape = newShape
-                , view =
-                    T.ArrangedView
-                        { offset = newOffset
-                        , strides = strides
-                        }
             }
 
 
@@ -294,22 +248,21 @@ unsafeLineAt i matrix =
         T.RawView ->
             let
                 ( height, width ) =
-                    case matrix.shape of
-                        h :: w :: _ ->
-                            ( h, w )
+                    unsafeSize matrix
 
-                        _ ->
-                            Debug.crash "Should never happen"
+                endIndex =
+                    1 + i + (width - 1) * height
             in
             { matrix
-                | length = width
+                | data = JsTypedArray.extract i endIndex matrix.data
+                , length = width
                 , shape = [ 1, width ]
-                , view = T.ArrangedView { offset = i, strides = [ 1, height ] }
+                , view = T.StridesView [ 1, height ]
             }
 
         T.TransposedView ->
-            -- Slightly different from ArrangedView branch
-            -- to produce a RawView instead of a TransposedView.
+            -- Return a RawView instead of a TransposedView.
+            -- TODO: inline optimization
             let
                 transposedColumn =
                     transpose matrix
@@ -317,7 +270,7 @@ unsafeLineAt i matrix =
             in
             { transposedColumn | shape = List.reverse transposedColumn.shape }
 
-        T.ArrangedView _ ->
+        T.StridesView _ ->
             matrix
                 |> transpose
                 |> unsafeColumnAt i
@@ -332,32 +285,26 @@ unsafeColumnAt j matrix =
     case matrix.view of
         T.RawView ->
             let
-                height =
-                    case matrix.shape of
-                        h :: _ ->
-                            h
+                ( height, width ) =
+                    unsafeSize matrix
 
-                        _ ->
-                            Debug.crash "Should never happen"
-
-                matrixOffset =
+                offset =
                     j * height
-
-                columnData =
-                    JsTypedArray.extract matrixOffset (matrixOffset + height) matrix.data
-
-                newShape =
-                    [ height, 1 ]
             in
-            { matrix | data = columnData, length = height, shape = newShape }
+            { matrix
+                | data = JsTypedArray.extract offset (offset + height) matrix.data
+                , length = height
+                , shape = [ height, 1 ]
+            }
 
+        -- TODO: inline optimization
         T.TransposedView ->
             matrix
                 |> transpose
                 |> unsafeLineAt j
                 |> transpose
 
-        T.ArrangedView { offset, strides } ->
+        T.StridesView strides ->
             let
                 ( height, vStride, hStride ) =
                     case ( matrix.shape, strides ) of
@@ -367,26 +314,31 @@ unsafeColumnAt j matrix =
                         _ ->
                             Debug.crash "Should never happen"
 
-                newOffset =
-                    offset + j * hStride
-
                 newShape =
                     [ height, 1 ]
+
+                offset =
+                    j * hStride
+
+                endIndex =
+                    1 + offset + (height - 1) * vStride
+
+                columnData =
+                    JsTypedArray.extract offset endIndex matrix.data
             in
             if vStride == 1 then
-                let
-                    columnData =
-                        JsTypedArray.extract newOffset (newOffset + height) matrix.data
-                in
-                { matrix | data = columnData, shape = newShape, view = T.RawView }
+                { matrix
+                    | data = columnData
+                    , length = height
+                    , shape = newShape
+                    , view = T.RawView
+                }
             else
-                let
-                    newArrangedView =
-                        { offset = newOffset
-                        , strides = strides
-                        }
-                in
-                { matrix | length = height, shape = newShape, view = T.ArrangedView newArrangedView }
+                { matrix
+                    | data = columnData
+                    , length = height
+                    , shape = newShape
+                }
 
 
 {-| Matrix multiplication
