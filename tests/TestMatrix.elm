@@ -1,6 +1,6 @@
 module TestMatrix
     exposing
-        ( transpose
+        ( equal
         )
 
 import Expect
@@ -9,11 +9,6 @@ import Test exposing (..)
 import TestFuzz as Fuzz
 
 
-transpose : Test
-transpose =
-    fuzz Fuzz.rawMatrix "Transposition is a symmetric application" <|
-        \matrix ->
-            matrix
-                |> Matrix.transpose
-                |> Matrix.transpose
-                |> Expect.equal matrix
+equal : Test
+equal =
+    todo "equal"

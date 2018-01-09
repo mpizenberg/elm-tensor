@@ -1,6 +1,7 @@
 module TestFuzz
     exposing
         ( rawMatrix
+        , stridesMatrix
         , transposedMatrix
         )
 
@@ -25,13 +26,37 @@ size =
 rawMatrix : Fuzzer Matrix
 rawMatrix =
     Fuzz.tuple ( size, size )
-        |> Fuzz.andThen (\( h, w ) -> Fuzz.map (T.fromTypedArray [ h, w ]) (dataFuzzer ( h, w )))
+        |> Fuzz.andThen (\( h, w ) -> Fuzz.map (T.unsafeFromTypedArray 2 [ h, w ]) (dataFuzzer ( h, w )))
 
 
 transposedMatrix : Fuzzer Matrix
 transposedMatrix =
     rawMatrix
         |> Fuzz.map Matrix.transpose
+
+
+stridesMatrix : Fuzzer Matrix
+stridesMatrix =
+    let
+        toStride : Matrix -> Fuzzer Matrix
+        toStride m =
+            let
+                ( height, width ) =
+                    Matrix.unsafeSize m
+
+                rangeFuzzer maxValue =
+                    Fuzz.map2
+                        (\a b -> ( min a b, max a b ))
+                        (Fuzz.intRange 0 maxValue)
+                        (Fuzz.intRange 0 maxValue)
+            in
+            Fuzz.map2
+                (\iRange jRange -> Matrix.unsafeSubmatrix iRange jRange m)
+                (rangeFuzzer height)
+                (rangeFuzzer width)
+    in
+    rawMatrix
+        |> Fuzz.andThen toStride
 
 
 
