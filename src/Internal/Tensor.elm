@@ -2,6 +2,7 @@ module Internal.Tensor
     exposing
         ( Tensor
         , TensorView(..)
+        , equal
         , extractValues
         , fromTypedArray
         , transpose
@@ -9,7 +10,9 @@ module Internal.Tensor
         )
 
 import Internal.List
+import JsFloat64Array
 import JsTypedArray exposing (Float64, JsTypedArray)
+import List.Extra
 
 
 type alias Tensor =
@@ -84,10 +87,72 @@ unsafeGetAt pos tensor =
     JsTypedArray.unsafeGetAt index tensor.data
 
 
+{-| Check if two arrays are equal.
+-}
+equal : Tensor -> Tensor -> Bool
+equal tensor1 tensor2 =
+    case ( tensor1.view, tensor2.view ) of
+        ( RawView, RawView ) ->
+            (tensor1.shape == tensor2.shape)
+                && JsTypedArray.equal tensor1.data tensor2.data
+
+        ( TransposedView, TransposedView ) ->
+            (tensor1.shape == tensor2.shape)
+                && JsTypedArray.equal tensor1.data tensor2.data
+
+        _ ->
+            (tensor1.shape == tensor2.shape)
+                && JsTypedArray.equal (extractValues tensor1) (extractValues tensor2)
+
+
 {-| Extract values of a Tensor.
 -}
 extractValues : Tensor -> DataArray
 extractValues tensor =
+    -- case tensor.view of
+    --     RawView ->
+    --         tensor.data
+    --
+    --     TransposedView ->
+    --         let
+    --             tensorStrides =
+    --                 List.reverse tensor.shape
+    --                     |> List.scanl (*) 1
+    --                     |> List.reverse
+    --                     |> List.drop 1
+    --
+    --             subToIndex : List Int -> Int
+    --             subToIndex =
+    --                 Internal.List.foldl2 (\p stride acc -> p * stride + acc) 0 tensorStrides
+    --
+    --             allSubscripts : List (List Int)
+    --             allSubscripts =
+    --                 tensor.shape
+    --                     |> List.foldl (\s ranges -> List.range 0 (s - 1) :: ranges) []
+    --                     |> List.Extra.cartesianProduct
+    --                     |> List.map List.reverse
+    --
+    --             indices =
+    --                 List.map (subToIndex >> toFloat) allSubscripts
+    --                     |> JsFloat64Array.fromList
+    --
+    --             get =
+    --                 JsTypedArray.unsafeGetAt
+    --         in
+    --         JsTypedArray.map (\floatId -> get (round floatId) tensor.data) indices
+    --
+    --     ArrangedView { offset, strides } ->
+    --         let
+    --             indices =
+    --                 Debug.crash "TODO"
+    --
+    --             get =
+    --                 JsTypedArray.unsafeGetAt
+    --
+    --             getDataAt id =
+    --                 get (get id indices) tensor.data
+    --         in
+    --         JsFloat64Array.initialize tensor.length getDataAt
     Debug.crash "TODO"
 
 
