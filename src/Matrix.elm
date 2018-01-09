@@ -114,7 +114,7 @@ Complexity:
 -}
 stack : Matrix -> Matrix
 stack matrix =
-    T.unsafeReshape [ matrix.length, 1 ] matrix
+    T.unsafeReshape 2 [ matrix.length, 1 ] matrix
 
 
 {-| Apply a function on all elements of two matrices and reduce a result.

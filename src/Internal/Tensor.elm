@@ -179,18 +179,22 @@ unsafeFromTypedArray dimension shape array =
 It is caller responsability to make sure shapes are compatible.
 If tensor was internally a strides view, recreate an new raw tensor.
 -}
-unsafeReshape : List Int -> Tensor -> Tensor
-unsafeReshape shape tensor =
+unsafeReshape : Int -> List Int -> Tensor -> Tensor
+unsafeReshape dimension shape tensor =
     case tensor.view of
         StridesView strides ->
             { tensor
-                | shape = shape
+                | data = extractValuesDetailed shape strides tensor.data
+                , dimension = dimension
+                , shape = shape
                 , view = RawView
-                , data = extractValuesDetailed shape strides tensor.data
             }
 
         _ ->
-            { tensor | shape = shape }
+            { tensor
+                | dimension = dimension
+                , shape = shape
+            }
 
 
 {-| Apply a function to each element of a tensor.
