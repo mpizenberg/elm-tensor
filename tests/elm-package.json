@@ -12,6 +12,7 @@
     "dependencies": {
         "elm-lang/core": "5.1.1 <= v < 6.0.0",
         "elm-community/elm-test": "4.0.0 <= v < 5.0.0",
+        "elm-community/list-extra": "7.0.1 <= v < 8.0.0",
         "mpizenberg/elm-js-typed-array": "1.0.0 <= v < 2.0.0"
     },
     "dependency-sources": {
