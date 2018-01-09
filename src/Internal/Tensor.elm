@@ -105,62 +105,56 @@ equal tensor1 tensor2 =
                 && JsTypedArray.equal (extractValues tensor1) (extractValues tensor2)
 
 
-{-| Extract values given a shape, strides and data array.
--}
-extractValuesDetailed : List Int -> List Int -> DataArray -> DataArray
-extractValuesDetailed shape strides data =
-    Debug.crash "TODO"
-
-
 {-| Extract values of a Tensor.
 -}
 extractValues : Tensor -> DataArray
 extractValues tensor =
-    -- case tensor.view of
-    --     RawView ->
-    --         tensor.data
-    --
-    --     TransposedView ->
-    --         let
-    --             tensorStrides =
-    --                 List.reverse tensor.shape
-    --                     |> List.scanl (*) 1
-    --                     |> List.reverse
-    --                     |> List.drop 1
-    --
-    --             subToIndex : List Int -> Int
-    --             subToIndex =
-    --                 Internal.List.foldl2 (\p stride acc -> p * stride + acc) 0 tensorStrides
-    --
-    --             allSubscripts : List (List Int)
-    --             allSubscripts =
-    --                 tensor.shape
-    --                     |> List.foldl (\s ranges -> List.range 0 (s - 1) :: ranges) []
-    --                     |> List.Extra.cartesianProduct
-    --                     |> List.map List.reverse
-    --
-    --             indices =
-    --                 List.map (subToIndex >> toFloat) allSubscripts
-    --                     |> JsFloat64Array.fromList
-    --
-    --             get =
-    --                 JsTypedArray.unsafeGetAt
-    --         in
-    --         JsTypedArray.map (\floatId -> get (round floatId) tensor.data) indices
-    --
-    --     ArrangedView { offset, strides } ->
-    --         let
-    --             indices =
-    --                 Debug.crash "TODO"
-    --
-    --             get =
-    --                 JsTypedArray.unsafeGetAt
-    --
-    --             getDataAt id =
-    --                 get (get id indices) tensor.data
-    --         in
-    --         JsFloat64Array.initialize tensor.length getDataAt
-    Debug.crash "TODO"
+    case tensor.view of
+        RawView ->
+            tensor.data
+
+        TransposedView ->
+            let
+                strides =
+                    List.reverse tensor.shape
+                        |> List.scanl (*) 1
+                        |> List.reverse
+                        |> List.drop 1
+            in
+            extractTensorValues tensor.shape strides tensor.data
+
+        StridesView strides ->
+            extractTensorValues tensor.shape strides tensor.data
+
+
+{-| Extract values given a shape, strides and data array.
+-}
+extractTensorValues : List Int -> List Int -> DataArray -> DataArray
+extractTensorValues shape strides data =
+    let
+        subToIndex : List Int -> Int
+        subToIndex =
+            Internal.List.foldl2 (\stride s acc -> stride * s + acc) 0 strides
+
+        allIndices : List Int
+        allIndices =
+            shape
+                |> List.foldl (\s ranges -> List.range 0 (s - 1) :: ranges) []
+                |> List.Extra.cartesianProduct
+                |> List.map (List.reverse >> subToIndex)
+    in
+    extractIndices allIndices data
+
+
+extractIndices : List Int -> DataArray -> DataArray
+extractIndices indices data =
+    let
+        get =
+            JsTypedArray.unsafeGetAt
+    in
+    List.map toFloat indices
+        |> JsFloat64Array.fromList
+        |> JsTypedArray.map (\floatId -> get (round floatId) data)
 
 
 {-| Create a Tensor from a typed array.
@@ -184,7 +178,7 @@ unsafeReshape dimension shape tensor =
     case tensor.view of
         StridesView strides ->
             { tensor
-                | data = extractValuesDetailed shape strides tensor.data
+                | data = extractTensorValues shape strides tensor.data
                 , dimension = dimension
                 , shape = shape
                 , view = RawView
@@ -206,7 +200,7 @@ map f tensor =
             { tensor
                 | view = RawView
                 , data =
-                    extractValuesDetailed tensor.shape strides tensor.data
+                    extractTensorValues tensor.shape strides tensor.data
                         |> JsTypedArray.map f
             }
 
