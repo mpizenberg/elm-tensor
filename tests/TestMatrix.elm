@@ -1,6 +1,7 @@
 module TestMatrix
     exposing
         ( equal
+        , transpose
         )
 
 import Expect
@@ -32,4 +33,17 @@ equal =
                 in
                 (not equal12 || not equal23 || equal13)
                     |> Expect.true "a & b => c   should be equiv to   -a | -b | c"
+        ]
+
+
+transpose : Test
+transpose =
+    describe "transpose"
+        [ fuzz TestFuzz.matrix "is a symmetry" <|
+            \matrix ->
+                matrix
+                    |> Matrix.transpose
+                    |> Matrix.transpose
+                    |> T.equal matrix
+                    |> Expect.true "should be: transpose (transpose matrix) == matrix"
         ]
